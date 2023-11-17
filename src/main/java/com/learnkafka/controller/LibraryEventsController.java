@@ -6,6 +6,7 @@ import com.learnkafka.producer.LibraryEventsProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,7 +19,7 @@ public class LibraryEventsController {
 
     private final LibraryEventsProducer libraryEventsProducer;
 
-    @PostMapping(value = "/v1/libraryevent")
+    @PostMapping(value = "/v1/libraryevent", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<LibraryEvent> postLibraryEvent(@RequestBody LibraryEvent libraryEvent) throws JsonProcessingException {
         log.info("libraryEvent : {}", libraryEvent);
         libraryEventsProducer.sendLibraryEventAsynchronouslyWithProducerRecord(libraryEvent);
