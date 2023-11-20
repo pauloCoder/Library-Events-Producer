@@ -17,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
-import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
@@ -39,11 +38,13 @@ class LibraryEventsControllerIntegrationTest {
     @Resource
     private EmbeddedKafkaBroker embeddedKafkaBroker;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     private Consumer<Integer, String> kafkaConsumer;
 
     @BeforeEach
     public void setUp() {
-        restTemplate.getRestTemplate().getMessageConverters().add(new StringHttpMessageConverter());
         var configs = KafkaTestUtils.consumerProps("console-consumer-1900", "true", embeddedKafkaBroker);
         configs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         kafkaConsumer = new DefaultKafkaConsumerFactory<>(configs, new IntegerDeserializer(), new StringDeserializer())
@@ -77,7 +78,7 @@ class LibraryEventsControllerIntegrationTest {
 
         Assertions.assertThat(consumerRecords.count()).isEqualTo(1);
         consumerRecords.forEach(record -> {
-                    var libraryEventActual = TestUtil.parseLibraryEventRecord(new ObjectMapper(), record.value());
+                    var libraryEventActual = TestUtil.parseLibraryEventRecord(objectMapper, record.value());
                     Assertions.assertThat(libraryEventActual).isEqualTo(TestUtil.libraryEventRecord());
                 }
         );
