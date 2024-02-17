@@ -60,8 +60,8 @@ public class LibraryEventsProducer {
         var key = libraryEvent.libraryEventId();
         var value = objectMapper.writeValueAsString(libraryEvent);
         ProducerRecord<Integer, String> producerRecord = buildProducerRecord(key, value);
-        // 1. blocking call - get metadata about the kafka cluster
-        // 2. Send message happens - Returns a CompleatableFutre
+        // 1. blocking call - get metadata about the kafka cluster => max.block.ms
+        // 2. Send message happens - Returns a CompleatableFutre => retries
         var completableFuture = kafkaTemplate.send(producerRecord);
         completableFuture
                 .whenComplete((sendResult, throwable) -> {
