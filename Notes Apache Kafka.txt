@@ -1,0 +1,465 @@
+=== Les principes de la plateforme de streaming (Apache Kafka) ===
+
+- Plateforme de streaming : permet à une application de produire et consommer un flux de données comme dans un système de messagerie.
+- La plateforme de streaming stocke le flux d'évènements afin que ceux-ci puissent être rejoués au besoin (stockage sur plusieurs serveurs
+  pour être tolérant aux pannes et maintenir une bonne disponibilité)
+- La plateforme permet aussi d'analyser et de traiter les évènements quand ils surviennent.
+
+=== Différences entre système de messagerie traditionnel - platforme de streaming kafka ===
+
+1.  Message perdu une fois consommée (retiré du broker) - Les évènements sont stockés pendant un certain temps et sont immutables.
+2.  Responsabilité du broker de garder une trace des messages consommés - Responsabilité du consumer de garder une trace des messages consommés.
+3.  Ciblé un consumer specifique pour lire un message venant du broker - N'importe quel consumer ayant accès au broker peut lire les messages.
+4.  Système non distribué - Système de streaming distribué (gère la charge et la repartit de façon inteligente).
+
+=== Cas d'utilisation ===
+
+Domaine du transport : envoi de notification du suivi du conducteur en temps réel au client, commande de nourriture.
+Domaine de la vente : notifications de vente, recommandations en temps réel d'achat, suivi de livraison de commande en ligne.
+Domaine bancaire : alerte à la fraude, nouvelles fonctionnalités.
+
+=== Quelques terminologies de Kafka ===
+
+- Kafka cluster : c'est un ensemble de brokers. Pour les gérer il faut un Zookeeper (gardien...) afin de tracer l'état des brokers et de gérer le cluster.
+- Broker : c'est ce avec quoi les clients Kafka interagissent. 
+- Kafka producer : c'est la façon dont de nouvelles données sont écrites et produites dans Kafka via le Producer API.
+- Kafka consumer : il est utilisé via le Consumer API afin de consommer les messages provenant du cluster Kafka.
+
+Kafka consumer et producer  sont des API clients de base à travers lesquels on peut interagir avec Kafka. Il existe des clients plus avancés :
+-  Kafka Connect : avec le Source Connector (récupère des données depuis une source externe telle qu'une DB, fichier externe, ElasticSearch) et le Sink Connector
+-  Kafka Stream : récupère les données depuis kafka afin d'effectuer des opérations sur celles-ci.
+
+=== Kafka Topics ===
+
+Un topic est une entité dans Kafka avec un nom : un peu comme une table dans une base de données. Il se trouve dans le broker.
+Une partition est l'endroit ou le message est situé dans le topic. Un topic peut avoir une ou plusieurs partitions. La partition est une 
+séquence ordonée et immutable d'enregistrements. Chaque partition est indépendante des autres. L'ordre est garanti au niveau de la partition.
+Les eregistrements (records) sont stockés/persistés dans un fichier de log distribués ou Kafka est installé. 
+Le Producer Kafka génère les records et les envoie dans la partition du topic souhaitée.
+
+=== Installation Kafka en local ===
+
+Nécessite deux composantes : Apache Zookeeper et le Broker Kafka.
+Le Zookeeper conserve les métadonnées du Broker et les informations du client Kafka. Chaque fois que l'on instancie un Broker celui-ci s'enregistre auprès du 
+Zookeeper qui va tracer son status.
+
+=== Création de Topic, producer et consumer de message avec la CLI ===
+
+Démarrer le container kafka1 puis créer le topic test-topic à l'aide de la commande kafka-topics.
+Créer le producer à l'aide de la commande kafka-console-producer.
+Créer le consumer à l'aide de la commmande kafka-console-consumer.
+
+=== Produce and consume message with key ===
+
+Les messages envoyés sans clés sont envoyés dans les partitions du topic sans respect d'ordre. Il n y a pas de garantie concernant le fait que le 
+consumer lisent les messages dans le bon ordre car tous les messages sont lus des partitions en même temps. 
+Les messages envoyés avec une clé, sont envoyés dans la même partition dès lors que leurs clés sont identiques.
+Afin d'envoyer et lire les messages avec une clé, il faut définir une propriété key.separator dans les producer et consumer, une propriété 
+parse.key = true dans le producer et une propriété print.key=true dans le consumer.
+
+=== Consumer Offsets ===
+
+Chaque message dans le topic a un ID appelé offset. Le consumer a 3 options de lecture des messages :
+  - en partant du début
+  - en partant de la fin
+  - à un endroit spécifique (uniquement avec du code)
+L'offset du consumer est stocké dans une variable nommée __consumer_offsets
+
+=== Consumer Groups ===
+
+Le group id est un attribut obligatoire pour démarrer un consumer.
+Les consumers groups sont utilisés pour une consommation de message évolutive.
+Chaque application doit avoir un id de consumer group unique.
+Les consumers groups sont gérés par le Broker Kafka qui agit comme un coordonateur.
+Chaque instance de consumer est single thread : elle ne lit les données que d'une partition à la fois.
+Si dans un topic :
+  - on a 3 partitions et 3 instances de consumer, chaque consumer lira les données d'une partition.
+  - on a 3 partitions et 2 instances de consumer, les consumer se partageront la lecture des partitions.
+  - on a 2 partitions et 3 instances de consumer, deux consumer liront les données de deux partitions, un sera inutilisé.
+
+=== Commit Log et Retention Policy ===
+
+Losrque le producer envoie un message dans le topic, celui-ci est écrit/sauvegarder dans un fichier système ou le broker kafka est installé.
+Chaque partition a son fichier de log. Une fois les records écrits dans les fichiers de log, c'est à ce moment là qu'ils sont commités. Le 
+consumer ne peut voir que les records qui ont déjà été commités.
+La retention policy définit combien de temps les messages sont conservés (1 semaine par défaut).
+Les fichier de log pour chaque partition se trouve dans le dossier : /var/lib/kafka/data/
+Le paramètre de configuration pour la retention policy se trouve dans le fichier de propriétés : /etc/kafka/server.properties
+
+=== Kafka comme un système de streaming distribué ===
+
+Un système distribué est en général une collection de système, qui travaille et interagissent ensemble dans le but de fournir 
+des fonctionnalités.
+  - Un système distribué doit être disponible et tolérant aux pannes : si un système de la collection est en panne le service 
+    doit toujours être disponible
+  - Répartir la charge avec fiabilité : les requêtes reçus des clients doivent être équitablement répartis entre les systèmes disponibles.
+  - Facilité la mise à l'échelle : l'ajout d'un nouveau système doit se faire aisément.
+  - La gestion de la concurrence doit être assez simple.
+
+Apache Kafka est un système distribué. Le cluster doit contenir plusieurs brokers afin d'éviter le "single point failure". 
+Le cluster est géré par le Zookeeper. Les brokers transmettent régulièrement leur statut au Zookeeper. Quand un des brokers est en panne,
+ce dernier est notifié et toutes les requêtes des clients seront dirigés vers des brokers disponibles sans que le client ne s'en apercoive.
+
+=== Mise en place d'un cluster Kafka avec 3 brokers ===
+
+On lancera cette fois-ci le fichier docker permettant de créer 3 brokers dépendant du même Zookeeper. 
+On créé ensuite le topic kafka avec un facteur de réplication valant 3. Cela permet de répiquer les données écrites à travers les 3 brokers
+kafka créés précédemment. Le facteur de partition sera aussi de 3.
+
+=== Comment Kafka distribue les requêtes des clients parmi les brokers (Leader / Follower) ? ===
+
+Dans notre exemple nous avons un Zookeeper avec un cluster de 3 brokers. Un des brokers jouera le rôle de controller (le 1er à avoir rejoint le
+cluster). Une fois que la commande de création de topic est émise au Zookeeper, il redirige la requête au controller. Elle se charge de distribuer
+les partitions aux brokers disponibles. Comme nous avons 3 brokers dans notre cluster, on aura une partition par broker. Ce concept de 
+distribution de partition est appelé affectation du chef -> "leader assignment". Le producer a un partitioner qui détermine dans quelle 
+partition ira le message. Dans le cas ou le message part dans la partiton-0, le message sera envoyé au leader de cette partition soit le broker-1.
+Le client fera toujours appel au leader de la partition. La charge est ainsi répartie à travers les brokers.
+Concernant la lecture des données avec le consumer, la requête client récupère toutes les données des partitions puis elle traite les données.
+Comme bonne pratique, on aura autant d'instance de consumer que de partitions de producer. Chaque consumer récupérera les données d'une partition.
+
+=== Comment Kafka gère-t-il la perte données (Replication and In-Sync-Replica => ISR) ?
+
+*  Replication
+
+Nous avons des données enregistrées dans les fichiers système pour chaque broker de chaque partition. Supposons maintenant que le broker-1 tombe 
+en panne. Toutes les données de ce broker réside dans son fichier système. Une fois qu'il est hors service il n y a aucun moyen pour le client
+d'accéder à ses données. Kafka gère ce problème grâce à la réplication.
+
+En effet, lors de la création de notre topic (test-topic), nous avions défini un facteur de réplication valant 3. Ce facteur définit le nombre
+de copies de notre message. Quand le producer envoie un message dans la partition-0, il est transmis au leader de celle-ci qui est le broker-1.
+Une fois reçue il est enregistré dans le fichier système du broker-1 (leader replica).
+Immédiatemment, des copies (réplicas) de ce message sont créées et enregistrés dans les fichiers systèmes des brokers-2 et brokers-3 
+qui sont donc des follower replica. C'est le système de réplication. Le même principe est appliqué au broker-2 et broker-3.
+
+Maintenant supposons que le broker-1 (leader de partition-0) soit hors service. Grâce à la réplication, ses données sont enregistrées dans 
+les fichiers systèmes des broker-2 et broker-3. Le Zookeeper est notifié de la panne du broker-1 et assigne le broker-2 comme nouveau controller.
+Désormais le broker-2 est leader des partition-0 et partition-1. Cette désignation de leader est effectué par le controller node qui fait partie
+du cluster. Les requêtes clientes émises pour produire et consommer les données de la partition-0 seront émises au broker-2.
+
+* In-Sync Replica (ISR)
+
+Représente le nombre de réplications synchronisées les unes avec les autres dans le cluster.
+  - Cela inclut les leaders et followers.
+  - La valeur recommandée doit être toujours plus grand que 1.
+  - La valeur idéale est celle du facteur de réplication.
+  - Il peut être controlé par la propriété min.insync.replicas.
+  - La valeur peut être appliquée au niveau du topic ou du broker.
+
+=== Configuration de l'ISR (min.insync.replicas) ===
+
+Dans la configuration actuelle nous avons 3 brokers. On démarre un producer et un consumer puis on fixe le nombre minimum de ISR à 2. Si l'on
+met hors service 2 brokers et que l'on essaie d'envoyer un message, une erreur nous indique :
+"NotEnoughReplicasException: Messages are rejected since there are fewer in-sync replicas than required".
+Cela permet de garantir d'un point de vue applicatif que, si les conditions requises pour le topic ne sont pas respectées, on ne pourra pas émettre
+et consommer de messages.
+
+=== Introduction à Spring KafkaTemplate / Envoi de message ===
+
+KafkaTemplate permet d'envoyer des données (records) au topic Kafka (similaire au JDBCTemplate pour les bases de données).
+La méthode KafkaTemplate.send() permet d'envoyer les données au broker Kafka après plusieurs étapes : 
+  - E1 => chaque message envoyé doit d'abord être sérialisé via un Serializer (key.serializer et value.serializer). Cette configuration est obligatoire
+    pour le producer. 
+  - E2 => viens ensuite le partitioner qui décide de la partition du topic dans laquelle ira le message. Un partitioner par défaut est fourni de base.
+  - E3 => la couche suivante concerne l'accumulateur de données (record accumulator). Chaque donnée envoyée depuis le KafkaTemplate n'est pas directement
+	  transmise au topic. L'accumulateur de données enregistre celles-ci dans une mémoire tampon (buffer) et les transmet au topic une fois que le buffer
+	  est rempli. Cela permet de limiter le nombre de transaction/requêtes entre l'application et le cluster Kafka, permettant ainsi d'améliorer les 
+	  performances générales. Le RecordAccumulator est composé de RecordBatch qui représente les partitions du topics.
+	  Pour diverses raisons, les RecordBatch ne seront pas remplis. Pour autant, on n'attendra pas éternellement qu'ils soient remplis avant d'envoyer 
+	  les messages. Il existe une propriété (linger.ms), qui permet d'envoyer les données dans le topic après un certain temps, même si les
+	  RecordBatch ne sont pas pleins.
+
+=== Création du Topic par l'utilisation de KafkaAdmin (Méthode non recommandée en production) ===
+
+Pour créer un topic, il est possible de procéder en créant un Bean de type KafkaAdmin via la configuration Spring.
+Il faut déclarer les paramètres d'admin (admin.properties.bootstrap-servers) dans le fichier de propriétés.
+Ensuite, dans une classe de configuration, on déclare un Bean retournant NewTopic en utilisant un TopicBuilder pour définir le topic.
+
+=== Création de Producer avec KafkaTemplate ===
+
+Le producer permet d'envoyer le message au topic. On utilisera pour se faire la classe KafkaTemplate afin d'interagir avec le cluster.
+Une fois le producer créé, on l'injecte dans le controller puis on fait appel à la méthode permettant d'envoyer le message au topic.
+L'envoi de message vers le topic peut se faire de façon asynchrone ou synchrone
+
+=== Test d'intégration avec @EmbeddedKafka ===
+
+- Configuration du Broker Kafka Embarqué et surcharge des adresses du producer
+
+Les tests d'intégrations vont nous permettre de tester nos Controller (simulation de l'appel à la méthode via l'URL) grâce à la classe TestRestTemplate. 
+Mais por l'instant, nos tests ne fonctionnent que si nos brokers Kafka sont réellement démarrés. Or les tests sont censés fonctionnés sans lien avec
+un environnement de dev/prod. Pour se faire, nous allons utiliser un Broker embarqué grâce à l'annotation @EmbeddedKafka.
+On peut y définir le nom des topics, le nombre de partitions par topic, le nombre de brokers et leurs ports etc...
+
+- Configuration du Kafka Consumer et injection du Broker Kafka embarqué
+
+On va injecter dans la classe le Broker Kafka embarqué (EmbeddedKafka). Esuite il nous faudra créer un Consumer grâce à la classe 
+DefaultConsumerFactory, puis ce dernier pourra consommer les données des topics de nos brokers. Enfin, grâce à la classe ConsumerRecord, l'on pourra
+récupérer les données consommées et effectuer nos vérifications. 
+
+=== Configuration des paramètres du Producer ===
+
+- acks = 0, 1 et -1 
+  * acks =  1  => garantit l'écriture du message dans le broker leader de la partition
+  * acks = -1  => garantit l'écriture du message dans le broker leader de la partition ainsi que dans tous les réplicas (par défaut)
+  * acks =  0  => aucune garantie concernant l'envoi et la persistance des messages (non recommandé)
+
+- retries = définit le nombre de tentatives pour envoyer le message dans le topic kafka en cas d'échec d'envoi par le producer (valeur [0, 2147483647])
+
+=== Introduction à Spring Kafka Consumer ===
+
+Le consumer scrute activement le topic (Poll) afin de récupérer des données de celui-ci aussitôt qu'elles sont disponibles. Les données sont ensuites 
+traitées et le processus continue. Un consumer Kafka peut consommer des données de plusieurs topics au même moment.
+Nous avons plusieurs options pour configurer notre Consumer Kafka :
+   - L'interface MessageListenerContainer qui a elle même deux implémentations :
+	* KafkaMessageListenerContainer => scrute les records dans le topic, enregistre la transaction des offsets (commits the offsets) et est single thread.
+	* ConcurrentMessageListenerContainer => il représente de multiples instances de KafkaMessageListenerContainer. Un des avantages de cette classe est que
+	  l'on peut instancier plusieurs instances de KafkaMessageListenerContainer afin de faire du traitement multi-thread
+   - L'annotation @KafkaListener qui uttilise en arrière plan l'implémentation ConcurrentMessageListenerContainer. C'est la façon la plus simple de créer 
+     un consumer.
+
+=== Construction du Consumer Kafka avec l'annotation @KafkaListener ===
+
+On va créer un composant (@Component) contenant une méthode onMessage que l'on annotera @KafkaListener. Celle-ci prend comme paramètres le nom des topics dont elle va récpuérer
+les données et nous fournit un ConsumerRecord. Même si conteneur d'écoute Kafka récupère plusieurs données, ceux-ci sont transmis à notre méthode une par une.
+
+=== Consumer Groups et Rebalance Hands-On ===
+
+Les consumers groups sont formés lorsque l'on a de multiples instance d'une même application. Les consumers groups sont le fondement de la consommation évolutive des messages.
+Le rééquilibrage (rebalance) est un concept Kafka qui signifie que le propriétaire d'une partition (celui qui la lit) change de l'un à l'autre.
+Supposons que pour une application, nous avons le consumer (library events consumer) et le topic kafka library-events. Le groupe id du consumer est nommé
+library-events-listener-group. Notre topic a 3 partitons. Dès lors que le consumer établit une connexion avec le topic, il détermine combien de partitions celui-ci possède.
+Comme nous avons une seule instance de consumer, les 3 partitions du topic seront assignés à celui-ci. Maintenant, nous instancions un consumer de la même application avec 
+le même groupe id. Le coordinateur de groupe qui fait partie du broker kafka reçoit le signal du nouveau consumer. Il va vérifier si le groupe id du nouveau consumer est le 
+même que celui du précédent. Si oui, il va déclencher un rééquilibrage, de sorte à redistribuer la lecture des partitons entre les deux consumers.
+
+=== Default Consumer Offset Management dans Spring Kafka ===
+
+Le consumer scrute activement les données du topic. Une fois que les données sont lues et traitées, le consumer va valider (commit) l'offset. Ainsi, si la boucle de scrutation
+active se déclenche de nouveau, elle sait ou elle a arrêté la lecture des données du topic.
+
+=== Concurrent consumers ===
+
+Nous allons ici démarrer plusieurs instantes concurrentes (simultanés) de listeners dans la même application. L'annotation @Kafka utilise le conteneur d'écoute de messages simultanés 
+(ConcurrentKafkaListenerContainerFactory). Cette option n'est pas nécessaire si notre environnement est dans le cloud ou si nous utilisons Kubernetes. Pour configurer plusieurs listeners,
+on changer le paramètre ConcurrentKafkaListenerContainerFactory.concurrency. Comme nous avons trois partitions dans notre topic on instanciera trois instances de consumers. On peut voir
+dans l'application que nous avons trois threads dans notre conteneur qui écoute le topic. Cette option est recommandée si nous ne sommes pas dans le cloud.
+
+=== Configuration du Broker Kafka embarqué pour les tests d'intégration du Consumer ===
+
+- Configuration du Broker Kafka Embarqué et surcharge des adresses du producer et du consumer
+
+Les tests d'intégrations vont nous permettre de tester nos services de Consumer (on a pas de Controller dans ce cas). 
+Mais por l'instant, nos tests ne fonctionnent que si nos brokers Kafka sont réellement démarrés. Or les tests sont censés fonctionnés sans lien avec
+un environnement de dev/prod. Pour se faire, nous allons utiliser un Broker embarqué grâce à l'annotation @EmbeddedKafka.
+On peut y définir le nom des topics, le nombre de partitions par topic, le nombre de brokers et leurs ports etc...
+
+=== Configuration de la base de données embarquées H2 ===
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    database: db2
+    database-platform: org.hibernate.dialect.H2Dialect
+    generate-ddl: true
+  h2:
+    console:
+      enabled: true
+
+=== Configuration du Kafka Consumer et injection du Broker Kafka embarqué ===
+
+On va injecter dans la classe le Broker Kafka embarqué (EmbeddedKafka). Esuite il nous faudra créer un KafkaTemplate (Producer) en fournissant dans le fichier application.yaml les paramètres
+du producer. En plus, il faudra s'assurer que le consumer est démarré et fonctionnel avant de réaliser les tests. On va pour se faire utiliser le bean KafkaListenerEndpointRegistry qui contient
+tous les conteneurs d'écoute (ListenerContainer). En utilisant la méthode ContainerTestUtils.waitForAssignment(), on s'assure que le container soit en attente jusqu'à ce que
+ toutes les partitions lui soient assignées. Cela va nous permettre d'éviter les erreurs de lecture de message.
+
+=== Test d'intégration pour la création d'un évènement de type NEW ===
+
+Dans ce test on va envoyer un message dans le topic library-events-test via le producer (KafkaTemplate) en mode synchrone. Il faut savoir que le Consumer est exécuté dans un thread différent de
+celui de l'application courante. Après l'appel du template kafka pour envoyer le message dans le topic, cela prend un peu de temps pour le consumer pour lire les messages et les traiter : dans notre
+cas l'enregistrer dans la donnée en base. Comme nous sommes dans des tests, l'enchaînement des instructions pourrait faire en sorte que le Consumer n'ait pas le temps de lire le message envoyé ce qui va
+faire échouer le test à tous les coups. Pour y remédier, nous allons utiliser le CountDownLatch : grâce à la méthode await, nous pourrons bloquer le Thread pendant le temps voulu. Ainsi, aucun autre
+Thread ne s'éxécute tant que le temps fixé n'est pas écoulé. Cela est très utile lors de la réalisation des tests avec des méthodes asynchrones.
+Par la suite, nous pourrons vérifier grâce à l'espion (@SpyBean) :
+   - la méthode onMessage() du bean LibraryEventsConsumer est bien appelée
+   - la méthode processLibraryEvent() du bean LibraryEventsService est bien appelée
+   - que les données sont bien enregistrées en base H2 grâce au LibraryEventsRepository
+Après chaque test, il faudra vider la base de données pour éviter des problèmes de données.
+
+=== Custom Error Handler et Custom Retry dans le consumer Kafka ===
+
+Lorsque le consumer n'arrive pas à lire un message, il est possible de rejouer celui-ci après un intervalle de temps ainsi qu'un nombre de tentatives de rejeux. Tout cela est possible grâce
+au gestionnaire d'erreur (CommonErrorHandler). Il est possible de redéfinir un gestionnaire d'erreur via notre redéfinition du ConcurrentKafkaListenerContainerFactory en lui passant en paramètre
+un CommonErrorHandler personnalisé. On utilisera ici le DefaultErrorHandler qui prend en paramètre un objet implémentant l'interface BackOff, définissant la vitesse à laquelle une opération est rejouée.
+
+=== Utilisation du RetryListener ===
+
+Le retry listener permet de s'assurer et de surveiller ce qui arrive à chaque tentative de rejeu. Il permet d'écouter ce qui arrive à chaque échec.
+Le retry listener permet d'intercepter le consumer en échec, l'exception qui a causé l'erreur ainsi que le nombre de tentatives en échec. On pourra ainsi logger des informations.
+
+=== Rejouer des exceptions spécificiques avec le Custom RetryPolicy ===
+
+Dans le cas de notre cours l'exception qui est rejouée (IllegalArgumentException) ne pourra jamais être solutionnée après rejeu. Il n'apparaît donc pas utile de rejouer cette exception. Dans ce genre de scénario, il faut
+ignorer certaines exceptions et rejouer exclusiment des exceptions spécifiques. Le gestionnaire d'erreur permet d'enregistrer les exceptions que l'on ne souhaite pas rejouer. Il faut alimenter cette liste via 
+DefaultErrorHandler.addNotRetryableExceptions(...). De la même façon, le gestionnaire d'erreur permet aussi de stocker les exceptions que l'on souhaite rejouer. Cette liste d'exceptions sera alimentée via 
+DefaultErrorHandler.addRetryableExceptions(...). On peut donc choisir de définir les exceptions non rejouables, auquel cas toutes les autres seront rejouées, ou définir les exceptions rejouables, auquel cas toutes les 
+autres exceptions n'entraîneront pas de retentative.
+
+=== Retentative des records en échec avec ExponentialBackOff ===
+
+L'idée derrière ExponentialBackOff est d'augmenter graduellement le temps entre les différentes tentatives de rejeu. On peut avec ce objet, définir l'intervalle de départ qui correspond au nombre de secondes après lesquelles 
+sera effectuée la 1ère tentative, le multiplicateur qui permet de définir le pas entre deux tentatives, l'intervalle max qui correspond au temps maximum entre deux tentatives à ne pas dépasser.
+
+=== Notion de Recovery avec Kafka Consumer ===
+
+Supposons que notre consumer a épuisé le nombre de tentatives définies de rejeu après lancement d'une exception, mais que nous souhaitions faire en sorte que ce message en échec puisse être rejoué (avec succès) plus tard.
+C'est là qu'intervient la notion de Recovery. Il existe plusieurs approches de recovery :
+   - Approche 1 : retraiter la donnée (record) encore. Par exemple si notre consumer interagit avec un système qui est temporairement hors service.
+
+      * Option 1 : publier le message dans un topic de rejeu (Retry Topic) et avoir un consumer qui va lire celui-ci.
+       Lorsque nos tentatives de rejeu seront épuisées, le message sera publié dans un topic kafka de rejeu (library-event.RETRY). Une fois le message d'erreur publié dans le topic kafka, un consumer kafka avec la même logique
+       que l'original sera invoqué. Cependant, il faut faire attention au message que nous voulons rejouer, entendons par là, le type d'exception issue du message a rejoué. En effet, si l'exception et donc le message ne peuvent 
+       être traités, on se retrouvera avec un message publié indéfiniment dans le topic de rejeu sans être résolu (boucle infinie).
+
+      * Option 2 : sauvegarder le message dans une base de données et le rejouer grâce à un Scheduler.
+      Le code de récupération va persister le message en échec en base de données puis nous créerons un scheduler qui récupérera les données en échec à intervalle régulier afin de les retraiter en les publiant dans le consumer.
+      Si la récupération fonctionne, la base de donnée est mise à jour avec un statut pour signifier la résolution de traitement du message.
+
+   - Approche 2 :retirer le message et continuer les traitements. Par exemple dans le cas d'un message invalide, le rejoué est inutile. 
+
+     * Option 1 : publié le message en échec dans une DeadLetter Topic pour effectuer un suivi.
+     L'objectif est de pouvoir effectuer un suivi (analyse). Dans ce cas le message sera envoyé dans un topic dédié (library-events.DLT) qui représente le topic des lettres/données mortes (DLT : Dead Letter Topic)
+
+     * Option 2 : sauvegarder la donnée en échec dans une base de donnée pour effectuer un suivi
+     L'objectif est le même qu'auparavant, pouvoir effectuer un suivi de la donnée avant de passer au traitement du message suivant.
+   
+=== Recovery : publier le message dans un topic de rejeu (Retry Topic) ===
+
+Dans notre classe de configuration, nous allons définir et configurer un objet de type DeadLetterPublishingRecoverer, qui permet de publier les messages en échec dans un topic de notre choix. Il prend en paramètre le template kafka,
+et une BiFunction qui va nous permettre de définir dans quel topic nous souhaitons envoyer le message en fonction de l'exception rencontrée : topic de retry si on souhaite rejoué le message, topic de dlt si non.
+Dans notre fichier de configuration, on va aussi définir le nom de ces différents topics. Une fois le 'record recoverer' configuré, il faut l'associer au gestionnaire d'erreur (DefaultErrorHandler).
+
+- Mise à jour du test d'intégration : afin de vérifier que les messages en erreur sont bien envoyées dans le topic de retry, nous allons mettre à jour nos tests d'intégration. Dans notre broker embarqué nous allons rajouter les topics
+de retry et de dlt. Ensuite, nous allons créer un consumer comme dans les TI du producer à l'aide de KafkaTestUtils et DefaultkafkaConsumerFactory. Dans le test d'intégration qui se nomme 
+testPublishUpdateLibraryEventWithLibraryEventIdNotNullAndExceptionRetry, nous allons demander au broker embarqué de souscrire (s'abonner) au topic de retry uniquement afin de consommer les données dans ce topic. A l'aide de KafkaTestUtils,
+nous allons récupérer les messages consommés depuis le topic de retry et effectuer les vérifications souhaitées concernant le message.
+
+=== Construction de l'écouteur du topic de rejeu (RetryTopic) et retraitement des messages ===
+
+Pour traiter les messages envoyés dans le topic de rejeu, il nous faut créer un nouveau listener. On crééra la classe LibraryEventsRetryConsumer identique à celle de base, sauf que l'on changera le topic écouté par le listener ainsi que
+le group id de notre consumer. Lorsque des messages sont envoyés dans le topic de rejeu et lu par le listener associé, des informations telles que : l'exception, la cause, la stack trace, le message de l'exception, le topic original etc...
+sont automatiquement ajoutés au header du message envoyé dans le topic grâce à l'utilisation de la classe DeadLetterPublishingRecovery.
+
+=== Refacto des tests d'intégration du LibraryEventsConsumer ===
+
+Lorsque nous relançons le test d'intégration pour la modification générant une exception, on constate qu'on est en échec du au nombre de retry. En effet, après avoir atteint le nombre maximum de tentatives on transmet le message au retry
+de rejeu qui fait de nouveau appel au service qui est aussi utilisé par le listener de rejeu. Ainsi, si nos tests sont écrits pour un seul consumer, il faut désactiver celui de retry. Pour se faire, il existe une approche pratique qui 
+permet de dire si le listener va démarrer avec notre application ou non : c'est le paramètre autoStartup de l'annotation @KafkaListener. On va l'activer dans le fichier de propriétés utilisé pour l'application et le désactiver dans celui
+des tests. Dans les tests d'intégration, on attendait que toutes les partitions soient assignés au topic. Comme le topic de retry n'est pas testé ici, on ne va attendre l'assignation des topics via le EndpointRegistry que pour le group
+id du container a testé.
+
+=== Publication du message dans la DeadLetterTopic ===
+
+Lorsque l'id de l'objet LibraryEvents est null, le message est envoyé dans le topic de DLT. Nous allons vérifier cela en modifiant les tests d'intégrations concernées. En test réel, on peut démarrer un consumer via la commande 
+kafka-console-consumer qui écoute le topic DLT et s'assurer du bon fonctionnement de l'envoi des messages dans le topic puis leur consommation par le consumer.
+
+=== Sauvegarde des messages en échec en base de données ===
+
+Dans cette approche, nous allons enregistrer les messages en échec puis utiliser un scheduler pour scruter activement les messages enregistrer en base et récupérer les messages en erreur afin de les faire retraiter. On ne pourra pas
+utiliser le DeadLetterPublisingRecoverer. Nous allons développer notre classe custom ou objet qui implémente ConsumerRecordRecoverer. En fonction de l'exception ayant causée l'échec de la consommation du message, on lui attribuera 
+un statut lors de l'enregistrement. On crééra l'objet FailureRecord qui contiendra les informations du message que nous souhaitons enregistrer en base de données puis les classes de repository et de service nécessaires.
+
+=== Utilisattion de spring scheduler pour récupérer les messages en échec ===
+
+Le scheduler va récupérer les messages en échec enregistrés dans la base de données à intervalle régulier pour ne transmettre que ceux avec le statut à RETRY dans la couche de service. Si le message échoue encore il est persisté dans la 
+base de données avec le même statut. Si le message est traité sans erreur le statut de celui-ci est mis à jour pour passer à SUCCESS. On va utiliser l'annotation @EnableScheduling pour autoriser Spring à réaliser les tâches de 
+scheduling. On va ensuite créer un composant avec une méthode annotée @Scheduling qui prend en paramètre la façon dont la méthode doit être jouée dans le temps (cron, intervalle fixe...). Dans cette méthode, on va récupérer
+toutes les données (FailureRecord) au statut à RETRY, les transformer en ConsumerRecord avant de les passer à la classe de service permettant de traiter les messages. Si le traitement est un succès, on passe le statut du message 
+à SUCCESS puis on le sauvegarde en base de données. Ainsi celui-ci ne sera plus rejoué. Si le traitement échoue, le statut reste à RETRY et le message sera rejoué.
+
+=== Gestion des erreurs avec le producer Kafka ===
+
+Nous abordons ici les différentes erreurs qui peuvent survenir dans le producer kafka. 
+- On peut avoir une indisponibilité du cluster kafka ce qui signifie que les brokers sont hors service (le cluster étant l'ensemble des brokers gérés par un zookeeper). 
+- Si acks = -1 ou all ce qui garantit l'écriture du message dans le broker leader de la partition ainsi que dans tous les réplicas (configuration par défaut), l'indisponibilité d'un broker dans le cluster entraînera des erreurs dans 
+le producer.
+- La configuration min.insync.replicas permet de définir le nombre de brokers synchronisés dans un cluster (nombre de réplications synchronisées les unes avec les autres dans le cluster). C'est une configuration importante quand 
+il s'agit de la fiabilité de la livraison des données. Elle peut être définie au niveau du broker ou du topic. Exemple : soit la valeur du paramètre min.insync.replicas = 2, et un seul broker est disponible. Cela signifie que nous 
+avons besoin que deux brokers soient disponibles pour effectuer deux réplications avant que le message soit transmis dans le topic via le producer. Dans notre cluster local nous avons 3 brokers. Nous rencontrons des problèmes et 
+deux brokers sont hors service et il ne nous en reste plus qu'un. Si le producer tente d'envoyer un message, nous aurons une erreur indiquant que nous n'avons pas assez de réplicas.
+
+=== Retry dans le producer Kafka - Broker non disponible ===
+
+Lorsque nous souhaitons envoyer un message dans le topic, le premier appel d'envoi kafkaTemplate.send() est bloquant. C'est lors de celui-ci que l'on va récupérer les métadonnées concernant le cluster. Le message n'est envoyé que 
+lorsque les métadonnées sont reçues. Le timeout d'attente des métadonnées est configuré via la propriété max.block.ms (défini à 60 secs par défaut). Dans un premier temps on ne démarre pas notre cluster et l'on tente d'envoyer un message.
+On reçoit des messages d'erreurs nous signifiant l'indisponibilité des brokers et on a un TimeoutException après 60 secs. Lorsque l'on démarre notre cluster les messages d'erreur concernant les brokers ne sont plus loggés car les métadonnées
+ont pu être récupérées. Cela signifie que nous n'avons pas besoin de redémarrer ou redéployer l'application pour qu'elle fonctionne normalement. En effet, si on renvoie le message, le producer le transmet bien dans le topic.
+
+=== Retry dans le producer Kafka - min.insync.replicas ===
+
+Dans notre configuration actuelle nous avons un cluster composé de trois brokers et un zookeeper avec le paramètre imin.insync.replicas = 2. Celà signifie que le producer sera autorisé à envoyer des messages dans le producer si au minimum
+deux brokers sont disponibles dans le cluster. Si un seul broker est disponible et que l'on essaie d'envoyer un message on aura une erreur. 
+NB : pour les propriétés de l'admin, il faut utiliser bootstrap.servers au lieu de bootstrap-servers. Les propriétés retries et retry.backoff.ms permettent respectivement de définir le nombre de tentative d'envoi du message ainsi que 
+le temps écoulé entre deux envois via le producer.
+
+=== Conserver et récupérer des messages en echec dans le producer Kafka ===
+
+Dans le producer Kafka, nous avons des callbacks appelés en cas d'échec et de succès que sont les méthodes onFailure et onSuccess.En cas d'échec, nous loggons le message mais celui-ci est perdu. Comment pouvons nous donc éviter cette 
+situation ?
+- Option 1 : 
+   La première étape lorsqu'une tentative d'envoi de message échoue (après les rejeux), est d'enregistrer le message en base de données. Le message est ainsi conservé avec le statut RETRY. La prochaine étape est de rejouer automatiquement
+   le message persisté en base de données. On pourra à cet effet mettre en place un scheduler permettant de récupérer les données à rejouer. Si la tentative réussit, on enregistre la donnée en base avec le statut SUCCESS.
+   Si la tentative échoue de nouveau, on maintiendra le statut à RETRY afin de reprendre le processus.
+- Option 2 :
+   La seconde approche consiste à mettre en place un topic de récupération (retry topic) afin de rejouer les messages en échec même si cette approche n'est pas à privilégier. En effet, nous aurons besoin d'un consumer dans la même 
+   application.
+
+=== Kafka Security et SSL ===
+
+Kafka est utilisé dans divers domaines tels que la banque,la vente en détails et les assurances; domaine dont la sécurité reste un des aspects les plus importants. En effet, des données sensibles telles que les informations bancaires,
+les informations personnelles des clients sont échangés lors des transactions. Kafka assure la sécurité grâce à deux protocoles :
+   - SSL (Secured Sockets Layer) remplacé par TLS (Transport Layer Security),SSL déprécié depuis 2015,
+   - SASL (Simple Authentication Security Layer)
+Dans notre cours nous étudierons le SSL. Il est utilisé pour deux tâches : le chiffrement des données et l'authentification.
+   - Le chiffrement : soit un utilisateur souhaitant passer une commande sur Amazon en utilisant le navigateur client Google Chrome. Une fois le panier complété et validé, la commande est envoyée au serveur. Celle-ci contient les 
+     informations de la commande et de paiement (données bancaires). Ces données sont envoyées via un réseau internet public et plusieurs moyens de hacking existent pour les voler. Sans SSL, les données sont envoyées au serveur comme
+     étant du texte clairement lisible. Un hacker peut établir un point entre le client et le serveur afin de récupérer les données lors de leur transmission (man in the middle attack). Pour empêcher cela nous avons donc besoin de chiffrer
+     les données. Avec le chiffrement SSL, nous avons une frontière qui est établi entre le client et le serveur qui est la couche SSL. Les données qui sont envoyées à travers cette couche sont donc chiffrés et illisibles. Mais lorsque le
+     serveur reçoit la requête, il utilise la clé privée afin de déchiffrer les informations. Cette clé privée ne doit jamais être partagée et les données sont indéchiffrables sans elles. La technique utilisée pour déchiffrer les données
+     est appelée cryptographie à clé public ou cryptographie asymétrique (Public Key Cryptography). Même si un hacker récupère les donnée, il ne pourra pas les lire sans la clé privée.
+   - L'authentification : elle permet de s'assurer que nous communiquons avec le bon serveur. Le but est de s'assurer que l'on ne récupère pas les données en imitant le vrai serveur. L'assurance que nous communiquons avec le vrai serveur
+     et que le serveur est sécurisé est offerte par le navigateur. Pour se faire, un certificat SSL doit être installé sur le serveur du site web en question. Il contient divers informations concernant le propriétaire du site.
+     Lorsque le client envoie une requête au serveur, la première action effectuée est la remise du certificat SSL au client par le serveur. Le certificat ne contient pas la clé privée mais uniquement des informations sur l'organisation 
+     et l'émetteur. Le client utilise le trust store afin de valider le certificat. Il vient avec le client lors de son installation. Un trust store aura le certificat racine de l'autorité de certification. Le client(ici le navigateur)
+     valide que le certificat contient l'une des autorités de certification de confiance. Ainsi le serveur est valide et une connexion de sécurité est établie.
+     
+=== Comment les entreprises gèrent les certificats SSL ? ===
+
+Supposons que nous avons un site web pour lequel nous souhaitons activer le SSL. La première chose à faire est de générer le magasin de clé (keystore file) contenant les informations à propos de l'adresse du site web et d'autres données
+importantes à propos de la compagnie. Une fois le magasin de clé créé il faut ensuite effectuer la demande de signature de certificat (CSR : Certificate Signing Request) et l'envoyer à l'autorité de certification (CA). 
+Elle valide les données provenant de l'entreprise en vérifiant l'adresse. Une fois la validation effectuée, le CA nous renvoie un certificat SSL signé. Il ne reste plus qu'au serveur à installer le certificat. Ici seul le client effectue 
+les validations afin d'effectuer une connexion sécurisée avec le serveur. On parle d'authentification unidirectionnelle.
+Dans notre cas, on utilisera l'authentification bidirectionnelle : le serveur devra valider les informations d'identifiant du client quand il demandera une connexion et le client validera lui aussi les informations d'identifiant du serveur.
+
+=== Mise en place du SSL sur Kafka ===
+
+nous allons activer le SSL dans notre cluster local ce qui signifie que notre application communiquera avec le cluster kafka en utilisant le protocole SSL. Pour effectuer l'activation nous suivrons ces 7 étapes :
+   - Générer le fichier de certificats électroniques server.keystore.jks
+   - Mettre en place une autorité de certification locale (Local Certificate Authority)
+   - Créer la demande de signature de certificat (Certificate Signing Request)
+   - Signer le certificat SSL
+   - Ajouter le certificat SSL signé au fichier server.keystore
+   - Configurer le SSL cert dans notre broker Kafka
+   - Créer le fichier client.trustore.jks pour notre client.
+
+
+--------------------------
+ docker-compose -f docker-compose-multi-broker.yml up -d
+ docker exec -it --tty kafka1 kafka-topics --bootstrap-server kafka1:19092 --create --topic library-events --replication-factor 3 --partitions 3
+ docker exec -it --tty kafka1 kafka-topics --bootstrap-server kafka1:19092 --list
+ docker exec -it --tty kafka1 kafka-topics --bootstrap-server kafka1:19092 --describe --topic library-events
+ docker exec -it --tty kafka1 kafka-console-consumer --bootstrap-server kafka1:19092,kafka2:19093,kafka3:19094 --group console-consumer-12500 --topic ...
+ docker exec -it --tty kafka1 kafka-topics --bootstrap-server kafka1:19092 --describe --topic library-events
+ docker exec -it --tty kafka1 kafka-configs --bootstrap-server kafka1:19092 --entity-type topics --entity-name library-events --alter --add-config min.insync.replicas=2
